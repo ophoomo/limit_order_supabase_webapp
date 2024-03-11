@@ -5,6 +5,7 @@ import InputText from 'primevue/inputtext'
 import Button from 'primevue/button'
 import MenuComponent from '@/components/MenuComponent.vue'
 import { supabase } from '@/config/supabaseClient'
+import { useToast } from 'primevue/usetoast';
 
 interface Orders {
   id: number
@@ -20,6 +21,7 @@ interface Setting {
 
 const num = ref()
 const orders = ref<Orders[]>([])
+const toast = useToast();
 
 const onEnterInput = () => {
   if (num.value.length == 0) return
@@ -30,7 +32,7 @@ const onEnterInput = () => {
 const get_data = async () => {
   let { data, error } = await supabase.from('tb_orders').select('*')
   if (error) {
-    alert('error get data')
+    toast.add({severity: 'error', summary: 'Error', life: 5000, detail: "error can't get data"})
     return
   }
   orders.value = data as Orders[]
@@ -39,7 +41,7 @@ const get_data = async () => {
 const check_limit = async () => {
   let { data, error } = await supabase.from('tb_settings').select('*').eq('key', 'LIMIT').limit(1)
   if (error) {
-    alert('error limit')
+    toast.add({severity: 'error', summary: 'Error', life: 5000, detail: "error can't get limit"})
     return
   }
 
@@ -47,6 +49,7 @@ const check_limit = async () => {
   if (result.length == 1) {
     if (orders.value.length < Number.parseInt(result[0].value)) return true
   }
+  toast.add({severity: 'warn', summary: 'Warn', life: 5000, detail: `LIMIT ${orders.value.length}/${result[0].value}`})
   return false
 }
 
@@ -54,18 +57,24 @@ const post_data = async (data: string) => {
   if (await check_limit()) {
     const { error } = await supabase.from('tb_orders').insert({ value: data })
     if (error) {
-      alert('error insert')
+      toast.add({severity: 'error', summary: 'Error', life: 5000, detail: "error can't insert data"})
       return
     }
-    get_data()
   }
 }
 
-
+const check_update = async () => {
+  supabase
+    .channel('all-channel')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'tb_orders' }, () => {
+      get_data()
+    })
+    .subscribe()
+}
 
 onMounted(() => {
   get_data()
-  setInterval(() => get_data(), 10000)
+  check_update()
 })
 </script>
 

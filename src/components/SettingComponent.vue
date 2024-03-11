@@ -2,33 +2,77 @@
 import Dialog from 'primevue/dialog'
 import InputNumber from 'primevue/inputnumber'
 import Button from 'primevue/button'
-import { ref } from 'vue'
-import { supabase } from '@/config/supabaseClient';
+import { onMounted, ref } from 'vue'
+import { supabase } from '@/config/supabaseClient'
+import { useConfirm } from 'primevue/useconfirm'
+import { useToast } from 'primevue/usetoast'
 
 const props = defineProps(['visible'])
 const emit = defineEmits(['update-visible'])
+const toast = useToast()
+const confirm = useConfirm()
 
 const limit = ref(0)
 
-const onSaveSetting = async () => {
-  const { error } = await supabase
-  .from('tb_settings')
-  .update({ value: limit.value })
-  .eq("key", "LIMIT")
-  .select()
+const get_data = async () => {
+  const { data, error } = await supabase.from('tb_settings').select()
   if (error) {
-    alert("error upsert")
+    alert('error upsert')
+    toast.add({ severity: 'error', summary: 'Error', life: 5000, detail: `error can't get data` })
     return
   }
+  data.map((item) => {
+    if (item.key == 'LIMIT') limit.value = item.value
+  })
+}
+
+const onSaveSetting = async () => {
+  const { error } = await supabase
+    .from('tb_settings')
+    .update({ value: limit.value })
+    .eq('key', 'LIMIT')
+    .select()
+  if (error) {
+    alert('error upsert')
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      life: 5000,
+      detail: `error can't delete save setting`
+    })
+    return
+  }
+  toast.add({ severity: 'success', summary: 'Success', life: 5000, detail: `save setting success` })
   emit('update-visible', false)
 }
 
 const clear_data = async () => {
   const { error } = await supabase.from('tb_orders').delete().neq('id', 0)
   if (error) {
-    alert("error");
+    toast.add({ severity: 'error', summary: 'Error', life: 5000, detail: `error can't clear data` })
+    return
   }
+  toast.add({ severity: 'success', summary: 'Success', life: 5000, detail: `clear data success` })
+  emit('update-visible', false)
 }
+
+const confirm_clear = () => {
+  confirm.require({
+    message: 'Are you sure you want to clear data all?',
+    header: 'Confirmation',
+    icon: 'pi pi-exclamation-triangle',
+    rejectClass: 'p-button-secondary p-button-outlined',
+    rejectLabel: 'Cancel',
+    acceptLabel: 'Confirm',
+    accept: () => {
+      clear_data()
+    }
+  })
+}
+
+onMounted(() => {
+  get_data()
+})
 </script>
 
 <template>
@@ -44,7 +88,14 @@ const clear_data = async () => {
       <InputNumber v-model="limit" :min="0" id="limit" class="flex-auto" autocomplete="off" />
     </div>
     <div class="mt-10 w-full">
-      <Button type="button" @click="clear_data" severity="danger" outlined label="Clear Order" class="w-full" />
+      <Button
+        type="button"
+        @click="confirm_clear"
+        severity="danger"
+        outlined
+        label="Clear Order"
+        class="w-full"
+      />
     </div>
     <div class="flex justify-end gap-2 mt-10">
       <Button
